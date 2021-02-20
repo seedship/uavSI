@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import constants
 from typing import NamedTuple
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -29,7 +30,10 @@ def TrimData(data: pd.DataFrame, linearization_point: LinearizationPoint, data_c
     dataConstraints is a map of data key to maximum allowable deviation
     """
     if data_constraints is not None:
-        lp_dict = linearization_point._asdict()
+        if type(linearization_point) is LinearizationPoint:
+            lp_dict = linearization_point._asdict()
+        else:
+            lp_dict = linearization_point.__dict__
         invalidList = np.zeros(len(data), dtype=bool)
         for key, val in data_constraints.items():
             invalidList |= (abs(data[key] - lp_dict.get(key, 0)) >= val)
@@ -37,10 +41,14 @@ def TrimData(data: pd.DataFrame, linearization_point: LinearizationPoint, data_c
         # TODO there might be a more Pythonic way to do this
         toRemove = [0] * sum(invalidList)
         idx = 0
-        for idxToRemove, val in invalidList:
-            toRemove[idx] = idxToRemove
-            idx += 1
-        data.drop(toRemove)
+        for idxToRemove, val in enumerate(invalidList):
+            if val:
+                toRemove[idx] = idxToRemove
+                idx += 1
+            if idx == len(toRemove):
+                break
+        print("Discarding ", len(toRemove), "out of ", len(data), " entries due to constraints.", sep='')
+        data = data.drop(toRemove)
 
     u = data['u'] - linearization_point.u
     w = data['w'] - linearization_point.w

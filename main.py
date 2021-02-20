@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import json
-from types import SimpleNamespace as Namespace
+from types import SimpleNamespace
 import sys
 import os
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     data = pd.read_csv(args.csv_path)
     json_data = open(args.lin_path, "r").read()
-    linearization = json.loads(json_data, object_hook=lambda d: Namespace(**d))
+    linearization = json.loads(json_data, object_hook=lambda d: SimpleNamespace(**d))
 
     limits = None
     if args.limit_path is not None:
