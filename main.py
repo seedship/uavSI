@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import sys
 import os
 
-import OrdinaryLeastSquares as ols
+import LongitudinalLeastSquares as lls
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -22,7 +22,7 @@ if __name__ == '__main__':
             os.mkdir('config')
 
         f = open('config/default_linearization_point.json', 'w')
-        f.write(json.dumps(ols.LinearizationPoint()._asdict(),
+        f.write(json.dumps(lls.LinearizationPoint()._asdict(),
                            default=lambda o: o.__dict__, indent=4))
         f.close()
 
@@ -41,16 +41,16 @@ if __name__ == '__main__':
         json_data = open(args.limit_path, "r").read()
         limits = json.loads(json_data)
 
-    trimmed_data = ols.TrimData(data, linearization, limits)
+    trimmed_data = lls.TrimData(data, linearization, limits)
 
-    X_coeffs, Z_coeffs, M_coeffs = ols.MMSE_fixed_theta_1d_throttle(linearization.theta, trimmed_data)
+    X_coeffs, Z_coeffs, M_coeffs = lls.MMSE_fixed_theta_1d_throttle(linearization.theta, trimmed_data)
     A = np.array([X_coeffs[0:4], Z_coeffs[0:4], M_coeffs[0:4]])
     B = np.array([X_coeffs[4:6], Z_coeffs[4:6], M_coeffs[4:6]])
     print('A:')
     print(A)
     print('B:')
     print(B)
-    res = ols.MSE(A, B, trimmed_data)
+    res = lls.MSE(A, B, trimmed_data)
     print('MSE residuals:', res)
 
-    ols.printCoefs(X_coeffs, Z_coeffs, M_coeffs)
+    lls.printCoefs(X_coeffs, Z_coeffs, M_coeffs)
