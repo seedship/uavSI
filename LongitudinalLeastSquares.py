@@ -165,10 +165,6 @@ def MMSE_fixed_theta_1d_nothrottle(theta_ref: float, data: TrimmedData):
     X_coeffs = np.insert(X_coeffs, 3, Xtheta)
     X_coeffs = np.append(X_coeffs, 0)
 
-    x = np.array([data.u, data.w, data.q, data.pitch]).T
-    xTxi = x.T @ x
-    xTxi = np.linalg.inv(xTxi)
-
     Ztheta = -constants.g * np.sin(theta_ref)
     w_minusg = data.wdot - Ztheta * data.theta
     Z_coeffs = xTxi @ x.T @ w_minusg
@@ -177,6 +173,41 @@ def MMSE_fixed_theta_1d_nothrottle(theta_ref: float, data: TrimmedData):
 
     M_coeffs = xTxi @ x.T @ data.qdot
     M_coeffs = np.insert(M_coeffs, 3, 0)
+    M_coeffs = np.append(M_coeffs, 0)
+
+    return [X_coeffs, Z_coeffs, M_coeffs]
+
+
+def MMSE_fixed_theta_system(theta_ref: float, data: TrimmedData):
+    """
+    Solves the following optimization
+    |u_dot|   |X_u X_w X_q -g * cos(theta_ref)| |  u  |
+    |w_dot| = |Z_u Z_w Z_q -g * sin(theta_ref)| |  w  |
+    |q_dot|   |M_u M_w M_q         0          | |  q  |
+                                                |theta|
+    """
+    x = np.array([data.u, data.w, data.q]).T
+    xTxi = x.T @ x
+    xTxi = np.linalg.inv(xTxi)
+
+    # subtract -g * cos(theta) from udot
+    Xtheta = -constants.g * np.cos(theta_ref)
+    u_minusg = data.udot - Xtheta * data.theta
+    X_coeffs = xTxi @ x.T @ u_minusg
+    X_coeffs = np.insert(X_coeffs, 3, Xtheta)
+    X_coeffs = np.append(X_coeffs, 0)
+    X_coeffs = np.append(X_coeffs, 0)
+
+    Ztheta = -constants.g * np.sin(theta_ref)
+    w_minusg = data.wdot - Ztheta * data.theta
+    Z_coeffs = xTxi @ x.T @ w_minusg
+    Z_coeffs = np.insert(Z_coeffs, 3, Ztheta)
+    Z_coeffs = np.append(Z_coeffs, 0)
+    Z_coeffs = np.append(Z_coeffs, 0)
+
+    M_coeffs = xTxi @ x.T @ data.qdot
+    M_coeffs = np.insert(M_coeffs, 3, 0)
+    M_coeffs = np.append(M_coeffs, 0)
     M_coeffs = np.append(M_coeffs, 0)
 
     return [X_coeffs, Z_coeffs, M_coeffs]
@@ -282,3 +313,24 @@ def printCoefs(X_coeffs: np.array, Z_coeffs: np.array, M_coeffs: np.array):
     print('Mtheta = ', M_coeffs[3], ';', sep='')
     print('Mcp = ', M_coeffs[4], ';', sep='')
     print('Mct = ', M_coeffs[5], ';', sep='')
+
+def printCoefs(system: np.array):
+    print('Xu = ', system[0][0], ';', sep='')
+    print('Xw = ', system[0][1], ';', sep='')
+    print('Xq = ', system[0][2], ';', sep='')
+    print('Xtheta = ', system[0][3], ';', sep='')
+    print('Zu = ', system[1][0], ';', sep='')
+    print('Zw = ', system[1][1], ';', sep='')
+    print('Zq = ', system[1][2], ';', sep='')
+    print('Ztheta = ', system[1][3], ';', sep='')
+    print('Mu = ', system[2][0], ';', sep='')
+    print('Mw = ', system[2][1], ';', sep='')
+    print('Mq = ', system[2][2], ';', sep='')
+    print('Mtheta = ', system[2][3], ';', sep='')
+    if system.shape[1] == 6:
+        print('Xcp = ', system[0][4], ';', sep='')
+        print('Xct = ', system[0][5], ';', sep='')
+        print('Zcp = ', system[1][4], ';', sep='')
+        print('Zct = ', system[1][5], ';', sep='')
+        print('Mcp = ', system[2][4], ';', sep='')
+        print('Mct = ', system[2][5], ';', sep='')
