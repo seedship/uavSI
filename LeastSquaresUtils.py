@@ -1,9 +1,15 @@
 import numpy as np
 import pandas as pd
+import json
 
 
 # inputs = np.array([data.u, data.w, data.q, data.theta, data.pitch, data.throttle]).T
 # outputs = np.array([data.udot, data.wdot, data.qdot])
+
+def Load_Limits(limit_path: str):
+    json_data = open(limit_path, 'r').read()
+    return json.loads(json_data)
+
 
 def solve_MMSE(outputs, inputs, coefficients=None):
     """
@@ -36,6 +42,7 @@ def solve_MMSE(outputs, inputs, coefficients=None):
             data[idx] = solvedCoefs[solvedCoefIdx]
             solvedCoefIdx += 1
     return coefficients
+
 
 def calculate_MSE(outputs, inputs, coefficients):
     return ((outputs - coefficients @ inputs) ** 2).sum(1)

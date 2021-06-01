@@ -6,9 +6,12 @@ from types import SimpleNamespace
 import sys
 import os
 
-import LongitudinalLeastSquares as lls
+import LongitudinalDynamics as ld
 
 if __name__ == '__main__':
+    '''
+    Deprecated, see one_shot.py
+    '''
     parser = argparse.ArgumentParser()
     parser.add_argument('-csv_path', help='Path of CSV file')
     parser.add_argument('-generate_default_configs', action='store_true', help='Generate default config files')
@@ -41,16 +44,16 @@ if __name__ == '__main__':
         json_data = open(args.limit_path, "r").read()
         limits = json.loads(json_data)
 
-    trimmed_data = lls.TrimData(data, linearization, limits)
+    trimmed_data = ld.TrimData(data, linearization, limits)
 
-    X_coeffs, Z_coeffs, M_coeffs = lls.MMSE_fixed_theta_1d_throttle(linearization.theta, trimmed_data)
+    X_coeffs, Z_coeffs, M_coeffs = ld.MMSE_fixed_theta_1d_throttle_noXq(linearization.theta, trimmed_data)
     A = np.array([X_coeffs[0:4], Z_coeffs[0:4], M_coeffs[0:4]])
     B = np.array([X_coeffs[4:6], Z_coeffs[4:6], M_coeffs[4:6]])
     print('A:')
     print(A)
     print('B:')
     print(B)
-    res = lls.MSE(A, B, trimmed_data)
+    res = ld.MSE(A, B, trimmed_data)
     print('MSE residuals:', res)
 
-    lls.printCoefs(X_coeffs, Z_coeffs, M_coeffs)
+    ld.printCoefs(np.concatenate((A, B), axis=1))

@@ -2,6 +2,7 @@ import numpy as np
 from scipy import constants
 from typing import NamedTuple
 import DataProcessing
+import json
 
 import pandas as pd
 
@@ -26,10 +27,17 @@ class TrimmedData(NamedTuple):
     throttle: pd.Series
 
 
-def TrimData(data: pd.DataFrame, linearization_point: LinearizationPoint, data_constraints: dict = None):
+def LoadLinearization(json_path: str):
+    json_data = open(json_path, 'r').read()
+    linearization = json.loads(json_data)
+    return LinearizationPoint(**linearization)
+
+
+def TrimData(data_path: str, linearization_point: LinearizationPoint, data_constraints: dict = None):
     """
     dataConstraints is a map of data key to maximum allowable deviation
     """
+    data = pd.read_csv(data_path)
     if data_constraints is not None:
         if type(linearization_point) is LinearizationPoint:
             lp_dict = linearization_point._asdict()
@@ -38,15 +46,15 @@ def TrimData(data: pd.DataFrame, linearization_point: LinearizationPoint, data_c
 
         data = DataProcessing.constrain_data(data, lp_dict, data_constraints)
 
-    u = data['u'] - linearization_point.u
-    w = data['w'] - linearization_point.w
-    q = data['q']
-    theta = data['theta'] - linearization_point.theta
-    udot = data['u_dot']
-    wdot = data['w_dot']
-    qdot = data['q_dot']
-    pitch = data['pitch_ctrl'] - linearization_point.pitch_ctrl
-    throttle = data['throttle_ctrl'] - linearization_point.throttle_ctrl
+    u = data.u - linearization_point.u
+    w = data.w - linearization_point.w
+    q = data.q
+    theta = data.theta - linearization_point.theta
+    udot = data.u_dot
+    wdot = data.w_dot
+    qdot = data.q_dot
+    pitch = data.pitch_ctrl - linearization_point.pitch_ctrl
+    throttle = data.throttle_ctrl - linearization_point.throttle_ctrl
 
     return TrimmedData(u, w, q, theta, udot, wdot, qdot, pitch, throttle)
 
