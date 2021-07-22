@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # Mcp = 1.5851135507463063;
     # Mct = 0.0;
 
-    data = pd.read_csv('data/data.csv')
+    data = pd.read_csv('../data/data.csv')
 
     rU = 55
     rW = 0.39

@@ -19,16 +19,16 @@ if __name__ == '__main__':
 
     plt.rcParams['legend.fontsize'] = 10
     fig = plt.figure()
-    if args.interpolate_XY:
-         e = np.linspace(data.E[0] - 367826.57, data.E[len(data.E) - 1] - 367826.57, len(data.E))
-         n = np.linspace(data.N[0] - 4435393.06, data.N[len(data.N) - 1] - 4435393.06, len(data.N))
-    else:
-         e = data.E
-         n = data.N
+    # if args.interpolate_XY:
+    #      e = np.linspace(data.E[0] - 367826.57, data.E[len(data.E) - 1] - 367826.57, len(data.E))
+    #      n = np.linspace(data.N[0] - 4435393.06, data.N[len(data.N) - 1] - 4435393.06, len(data.N))
+    # else:
+    #      e = data.E
+    #      n = data.N
     ax = fig.gca(projection='3d')
-    ax.plot(e, n, data.U, label='SI Maneuver')
+    ax.plot(data.lat, data.lon, data.U)
     ax.legend()
-    ax.set_xlabel("Position East (m)")
-    ax.set_ylabel("Position North (m)")
+    ax.set_xlabel("Latitude")
+    ax.set_ylabel("Longitude")
     ax.set_zlabel("Position Up (m)")
     plt.show()

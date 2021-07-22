@@ -1,4 +1,5 @@
 import LeastSquaresUtils as ls
+import DataProcessing as dp
 
 import numpy as np
 from scipy import constants
@@ -10,7 +11,7 @@ if __name__ == '__main__':
     Regresses the A matrix first, and then the B matrix
     '''
     linearization = ld.LoadLinearization('maneuvers/linearization.json')
-    limits = ls.Load_Limits('maneuvers/limits.json')
+    limits = dp.Load_Limits('maneuvers/limits.json')
     trimmed_data = ld.TrimData('maneuvers/u_long.csv', linearization, limits)
 
     inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta])

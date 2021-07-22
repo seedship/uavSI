@@ -1,8 +1,84 @@
 import numpy as np
 import pandas as pd
-
+import json
 import math
+import re
+
+import constants.avistar as constants
+
+import scipy.signal
+
 # from matplotlib import pyplot as plt
+def calculateSingletDoubletStart(data: pd.Series):
+    """
+    Check if 10 consecutive data points are almost identical
+    """
+    delay1 = data.drop(len(data) - 1)
+    delay2 = delay1.drop(len(delay1) - 1)
+    delay3 = delay2.drop(len(delay2) - 1)
+    delay4 = delay3.drop(len(delay3) - 1)
+    delay5 = delay4.drop(len(delay4) - 1)
+    delay6 = delay5.drop(len(delay5) - 1)
+    delay7 = delay6.drop(len(delay6) - 1)
+    delay8 = delay7.drop(len(delay7) - 1)
+    delay9 = delay8.drop(len(delay8) - 1)
+
+    data = data.drop([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    delay1 = delay1.drop([0, 1, 2, 3, 4, 5, 6, 7])
+    delay2 = delay2.drop([0, 1, 2, 3, 4, 5, 6])
+    delay3 = delay3.drop([0, 1, 2, 3, 4, 5])
+    delay4 = delay4.drop([0, 1, 2, 3, 4])
+    delay5 = delay5.drop([0, 1, 2, 3])
+    delay6 = delay6.drop([0, 1, 2])
+    delay7 = delay7.drop([0, 1])
+    delay8 = delay8.drop([0])
+
+    mask1 = (data.to_numpy() == delay1.to_numpy())
+    mask2 = (delay1.to_numpy() == delay2.to_numpy())
+    mask3 = (delay2.to_numpy() == delay3.to_numpy())
+    mask4 = (delay3.to_numpy() == delay4.to_numpy())
+    mask5 = (delay4.to_numpy() == delay5.to_numpy())
+    mask6 = (delay5.to_numpy() == delay6.to_numpy())
+    mask7 = (delay6.to_numpy() == delay7.to_numpy())
+    mask8 = (delay7.to_numpy() == delay8.to_numpy())
+    mask9 = (delay8.to_numpy() == delay9.to_numpy())
+    mask = mask1 & mask2 & mask3 & mask4 & mask5 & mask6 & mask7 & mask8 & mask9
+
+    return np.argmax(mask)
+
+# def calculateSinglet(data: pd.Series):
+#     """
+#     Counts backwords and stops when more than 2 unique values have been found
+#     """
+#     uniqueValues = set()
+#     for idx in reversed(range(len(data))):
+#         uniqueValues.add(data[idx])
+#         if len(uniqueValues) > 2:
+#             return idx + 1
+#
+# def calculateDoublet(data: pd.Series):
+#     """
+#     Counts backwords and stops when more than 2 unique values have been found
+#     """
+#     uniqueValues = set()
+#     for idx in reversed(range(len(data))):
+#         uniqueValues.add(data[idx])
+#         if len(uniqueValues) > 3:
+#             return idx + 1
+
+def demarcate(data, demarkation, start=0, end=-1):
+    startIdx = np.argmax(data.sequenceNo == demarkation[start])
+    endIdx = np.argmax(data.sequenceNo == demarkation[end] + 1)
+    data = data[startIdx:endIdx]
+    data = data.reset_index(drop=True)
+    return data
+
+def parseDemarcation(path):
+    s = open(path).read()
+    demarcation = re.split(r',', s)
+    for idx in range(len(demarcation)):
+        demarcation[idx] = int(demarcation[idx])
+    return demarcation
 
 def constrain_data(data: pd.DataFrame, linearization_point: dict, data_constraints: dict):
     """
@@ -35,51 +111,108 @@ def constrain_data(data: pd.DataFrame, linearization_point: dict, data_constrain
     print("Discarding ", len(to_remove), "out of ", len(data), " entries due to constraints.", sep='')
     return data.drop(to_remove)
 
-def fromAlvolo(data: pd.DataFrame):
-    data['roll_ctrl'] = np.zeros(len(data), dtype=np.float64)
-    data['pitch_ctrl'] = np.zeros(len(data), dtype=np.float64)
-    data['yaw_ctrl'] = np.zeros(len(data), dtype=np.float64)
-    data = discardBadIMU(data)
-    data['timestamp'] = data['Time']
 
-    data['phi'] = data['Euler_Angle_Phi'] * np.pi / 180
-    data['theta'] = data['Euler_Angle_Theta'] * np.pi / 180
-    data['psi'] = data['Euler_Angle_Psi'] * np.pi / 180
+def fromAlvolo2019(data: pd.DataFrame, discard_bad: bool = False) -> pd.DataFrame:
+    if discard_bad:
+        data['delta_a'] = np.zeros(len(data), dtype=np.float64)
+        data['delta_e'] = np.zeros(len(data), dtype=np.float64)
+        data['delta_r'] = np.zeros(len(data), dtype=np.float64)
+        data = discardBadIMU2019(data)
+    else:
+        data['delta_a'] = data['Aileron_defl'] # negative, opposite of X-plane convention
+        data['delta_e'] = data['Elevator_defl'] # negative, opposite of X-plane convention
+        data['delta_r'] = data['Rudder_del'] # positive, follows X-plane convention
 
-    data['p'] = data['Rot_Rate_x'] * np.pi / 180
-    data['q'] = data['Rot_Rate_y'] * np.pi / 180
-    data['r'] = data['Rot_Rate_z'] * np.pi / 180
+    data['delta_a'] = -data['delta_a'] # negative, opposite of X-plane convention
+    data['delta_e'] = -data['delta_e'] # negative, opposite of X-plane convention
+    data['delta_r'] = -data['delta_r']
 
-    data['u_dot'] = data['Accel_x']
-    data['v_dot'] = data['Accel_y']
-    data['w_dot'] = data['Accel_z']
+    data['roll_ctrl'] = data['delta_a'] / -constants.AILERON_LIMIT
+    data['pitch_ctrl'] = data['delta_e'] / -constants.ELEVATOR_LIMIT
+    data['yaw_ctrl'] = data['delta_r'] / constants.RUDDER_LIMIT
 
-    data_tp1 = data[1:]
-    tp1 = data_tp1['Time'].to_numpy()
-    data_tp1 = np.array([data_tp1['p'], data_tp1['q'], data_tp1['r'], data_tp1['phi'], data_tp1['theta'], data_tp1['psi']])
-    data_tm1 = data[:-1]
-    tm1 = data_tm1['Time'].to_numpy()
-    data_tm1 = np.array([data_tm1['p'], data_tm1['q'], data_tm1['r'], data_tm1['phi'], data_tm1['theta'], data_tm1['psi']])
+    # seconds to nanoseconds
+    data['timestamp'] = data['Time'] * 1E9
 
-    data_diff = (data_tp1 - data_tm1) / (tp1 - tm1)
+    data['phi'] = np.deg2rad(data['Euler_Angle_Phi'])
+    data['theta'] = np.deg2rad(data['Euler_Angle_Theta'])
+    data['psi'] = np.deg2rad(data['Euler_Angle_Psi'])
 
-    data['p_dot'] = tp1tm1Derivative(data_diff[0])
-    data['r_dot'] = tp1tm1Derivative(data_diff[1])
-    data['q_dot'] = tp1tm1Derivative(data_diff[2])
-    data['phi_dot'] = tp1tm1Derivative(data_diff[3])
-    data['theta_dot'] = tp1tm1Derivative(data_diff[4])
-    data['psi_dot'] = tp1tm1Derivative(data_diff[5])
+    # Filtered
+    rotationalFilterCoeffs = scipy.signal.savgol_coeffs(53, 2)
+    data['p'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_x, padlen=0))
+    data['q'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_y, padlen=0))
+    data['r'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_z, padlen=0))
+
+    accelCoeffs = scipy.signal.savgol_coeffs(53, 2)
+    data['u_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, data.Accel_x, padlen=0)
+    data['v_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, data.Accel_y, padlen=0)
+    data['w_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, -data.Accel_z, padlen=0) # Accel z is flipped
+
+    # data['p_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.p, data.Time), padlen=0)
+    # data['q_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.q, data.Time), padlen=0)
+    # data['r_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.r, data.Time), padlen=0)
+    data['phi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.phi, data.Time), padlen=0)
+    data['theta_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.theta, data.Time), padlen=0)
+    data['psi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.psi, data.Time), padlen=0)
+    # data['phi_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.phi_dot, data.Time), padlen=0)
+    # data['theta_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.theta_dot, data.Time), padlen=0)
+    # data['psi_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.psi_dot, data.Time), padlen=0)
+
+    # Unfiltered
+    data['p_dot'] = np.gradient(data.p, data.Time)
+    data['q_dot'] = np.gradient(data.q, data.Time)
+    data['r_dot'] = np.gradient(data.r, data.Time)
+    # data['phi_dot'] = np.gradient(data.phi, data.Time)
+    # data['theta_dot'] = np.gradient(data.theta, data.Time)
+    # data['psi_dot'] = np.gradient(data.psi, data.Time)
+    data['phi_ddot'] = np.gradient(data.phi_dot, data.Time)
+    data['theta_ddot'] = np.gradient(data.theta_dot, data.Time)
+    data['psi_ddot'] = np.gradient(data.psi_dot, data.Time)
+
+    # Or Filtered
+    # data['p'] = np.deg2rad(data['Rot_Rate_x_filt'])
+    # data['q'] = np.deg2rad(data['Rot_Rate_y_filt'])
+    # data['r'] = np.deg2rad(data['Rot_Rate_z_filt'])
+    #
+    # data['u_dot'] = data.A_x
+    # data['v_dot'] = data.A_y
+    # data['w_dot'] = -data.A_z # Accel z is flipped
+    #
+    # data['p_dot'] = scipy.signal.savgol_filter(np.gradient(data.p, data.Time), 45, 3, mode='constant')
+    # data['q_dot'] = scipy.signal.savgol_filter(np.gradient(data.q, data.Time), 45, 3, mode='constant')
+    # data['r_dot'] = scipy.signal.savgol_filter(np.gradient(data.r, data.Time), 45, 3, mode='constant')
+    # data['phi_dot'] = scipy.signal.savgol_filter(np.gradient(data.phi, data.Time), 45, 3, mode='constant')
+    # data['theta_dot'] = scipy.signal.savgol_filter(np.gradient(data.theta, data.Time), 45, 3, mode='constant')
+    # data['psi_dot'] = scipy.signal.savgol_filter(np.gradient(data.psi, data.Time), 45, 3, mode='constant')
+
+    data['E'] = data.Easting
+    data['N'] = data.Northing
+    data['U'] = data.Alt
+
+    data['u'] = data.u_mps
+    data['v'] = data.v_mps
+    data['w'] = data.w_mps
+
+    data['rpm'] = data.Motor_Rotation_Rate
+    data['alpha'] = np.deg2rad(data.alpha_deg)
+    data['beta'] = np.deg2rad(data.beta_deg)
+    data['Va'] = data.Airspeed
+    data['Vg'] = data.V_tot_mps
 
     return data
+
 
 '''
 Fills in servo data. Deletes imu entries with all 0 euler angles, acclerations, and rotation rates 
 '''
-def discardBadIMU(data: pd.DataFrame):
+
+
+def discardBadIMU2019(data: pd.DataFrame):
     last_aileron = float('nan')
     last_elevator = float('nan')
     last_rudder = float('nan')
-    last_flap = float('nan')
+    # last_flap = float('nan')
     to_remove = []
     for idx in range(len(data)):
         # Because servo data updates slower than IMU data, use last one
@@ -88,27 +221,27 @@ def discardBadIMU(data: pd.DataFrame):
         ail = data['Aileron_defl'][idx]
         ele = data['Elevator_defl'][idx]
         rud = data['Rudder_del'][idx]
-        flp = data['Flap_defl'][idx]
+        # flp = data['Flap_defl'][idx]
         if not math.isnan(ail):
             last_aileron = ail
         elif math.isnan(last_aileron):
             to_remove.append(idx)
             continue
-        data['roll_ctrl'][idx] = last_aileron
+        data['delta_r'][idx] = last_aileron
 
         if not math.isnan(ele):
             last_elevator = ele
         elif math.isnan(last_elevator):
             to_remove.append(idx)
             continue
-        data['pitch_ctrl'][idx] = last_elevator
+        data['delta_e'][idx] = last_elevator
 
         if not math.isnan(rud):
             last_rudder = rud
         elif math.isnan(last_rudder):
             to_remove.append(idx)
             continue
-        data['yaw_ctrl'][idx] = last_rudder
+        data['delta_r'][idx] = last_rudder
 
         # For now, we don't need flap data so we won't discard the sample if it is missing
         # if not math.isnan(flp):
@@ -122,40 +255,33 @@ def discardBadIMU(data: pd.DataFrame):
     print('Discarding', len(to_remove), 'data points for having all 0 imu entries or undefined servo input')
     return data.drop(to_remove)
 
-'''
-Returns if imu entry contains all 0 euler angles, acclerations, and rotation rates 
-'''
+
+# def adjustDelay(original: pd.Series, filtered: pd.Series):
+#     cc = scipy.signal.correlate(original, filtered)
+#     delay = np.argmax(cc)-len(original)
+#     if delay >= 0:
+#         print("Warning! Delay greater than or equal to 0 when adjusting for filter delay. Delay is:", delay)
+#     return filtered.shift(delay), delay
+
+
+def Load_Limits(limit_path: str):
+    json_data = open(limit_path, 'r').read()
+    return json.loads(json_data)
+
+
 def checkIdxBad(data: pd.DataFrame, idx: int):
-    keys = ['Euler_Angle_Phi', 'Euler_Angle_Theta', 'Euler_Angle_Psi', 'Accel_x', 'Accel_y', 'Accel_z', 'Rot_Rate_x', 'Rot_Rate_y', 'Rot_Rate_z']
+    """
+    Returns if imu entry contains all 0 euler angles, acclerations, and rotation rates
+    """
+    keys = ['Euler_Angle_Phi', 'Euler_Angle_Theta', 'Euler_Angle_Psi', 'Accel_x', 'Accel_y', 'Accel_z', 'Rot_Rate_x',
+            'Rot_Rate_y', 'Rot_Rate_z']
     for k in keys:
         dp = data[k]
         if dp[idx] != 0:
             return False
     return True
 
-'''
-Performs the following derivation:
 
-Takes the average of the following 2 quantities:
- * difference between data point i and data point i+1 divided by the time difference
- * difference between data point i-1 and data point i divided by the time difference
-If 1 of the 2 quantities arent available, the other one is used
-
-Takes a length n-1 np array of difference values (in[i] = data[i + 1] - data[i])
-
-x  | t | x'
---------------
- 0 | 0 | (x1 - x0) / (t1 - t0) 
- 1 | 1 | 0.5 * (x1 - x0) / (t1 - t0) + 0.5 * (x2 - x1) / (t2 - t1)
- 2 | 2 | 0.5 * (x2 - x1) / (t2 - t1) + 0.5 * (x3 - x2) / (t3 - t2)
-...|...|    
-n-3|n-3| 0.5 * (x_(n-3) - x_(n-4)) / (t_(n-3) - t_(n-4)) + 0.5 * (x_(n-2) - x_(n-3)) / (t_(n-2) - t_(n-3))
-n-2|n-2| 0.5 * (x_(n-2) - x_(n-3)) / (t_(n-2) - t_(n-3))  + 0.5 * (x_(n-1) - x_(n-2)) / (t_(n-1) - t_(n-2)) 
-n-1|n-1| (x_(n-1) - x_(n-2)) / (t_(n-1) - t_(n-2)) 
-'''
-def tp1tm1Derivative(data: np.array):
-    deriv = np.zeros(len(data) + 1, dtype=np.float64)
-    deriv[0] = data[0]
-    deriv[-1] = data[-1]
-    deriv[1:-1] = 0.5 * data[:-1] + 0.5 * data[1:]
-    return deriv
+def printEntry(name: str, series: np.array):
+    print(name, ':', series, '\nMean: ', np.mean(series), '\nVariance: ', np.var(series), '\nStandard Deviation: ',
+          np.std(series), '\n', sep='')

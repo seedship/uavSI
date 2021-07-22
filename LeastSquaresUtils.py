@@ -1,15 +1,4 @@
 import numpy as np
-import pandas as pd
-import json
-
-
-# inputs = np.array([data.u, data.w, data.q, data.theta, data.pitch, data.throttle]).T
-# outputs = np.array([data.udot, data.wdot, data.qdot])
-
-def Load_Limits(limit_path: str):
-    json_data = open(limit_path, 'r').read()
-    return json.loads(json_data)
-
 
 def solve_MMSE(outputs, inputs, coefficients=None):
     """
@@ -29,13 +18,17 @@ def solve_MMSE(outputs, inputs, coefficients=None):
         freeIndicies = np.where(data != data)[0]
         fixedIndicies = np.where(data == data)[0]
 
-        x = inputs[freeIndicies].T
-        adjustment = (inputs[fixedIndicies].T * data[fixedIndicies]).sum(1)
-        adjustedOutputs = outputs[row] - adjustment
+        if len(fixedIndicies) > 0:
+            x = inputs[freeIndicies].T
+            adjustment = (inputs[fixedIndicies].T * data[fixedIndicies]).sum(axis=1)
+            adjustedOutputs = outputs[row] - adjustment
+        else:
+            adjustedOutputs = outputs
+            x = inputs
 
         xTxi = np.linalg.inv(x.T @ x)
 
-        solvedCoefs = xTxi @ x.T @ adjustedOutputs.T
+        solvedCoefs = xTxi @ x.T @ adjustedOutputs
 
         solvedCoefIdx = 0
         for idx in freeIndicies:
