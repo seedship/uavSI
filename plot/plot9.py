@@ -125,6 +125,12 @@ def plot9(data: pd.DataFrame, demarkation=[]):
     ax[coords].set_xlabel('Time (s)')
     ax[coords].set_ylabel('Inertial Rotational Acceleration (deg/s^2)')
     ax[coords].grid()
+    if 'phi_ddot' not in data:
+        data['phi_ddot'] = np.gradient(data.phi_dot, data.timestamp)
+    if 'theta_ddot' not in data:
+        data['theta_ddot'] = np.gradient(data.theta_dot, data.timestamp)
+    if 'psi_ddot' not in data:
+        data['psi_ddot'] = np.gradient(data.psi_dot, data.timestamp)
     ax[coords].scatter(data.timestamp, np.rad2deg(data.phi_ddot), alpha=ALPHA, s=SVAL)
     ax[coords].scatter(data.timestamp, np.rad2deg(data.theta_ddot), alpha=ALPHA, s=SVAL)
     ax[coords].scatter(data.timestamp, np.rad2deg(data.psi_ddot), alpha=ALPHA, s=SVAL)

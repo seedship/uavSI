@@ -51,6 +51,9 @@ if __name__ == '__main__':
     print("yaw_ctrl trim (%):", np.mean(trimmed_data.yaw_ctrl))
     print("tan(w/u) trim (rad):", np.mean(np.tan(trimmed_data.w/trimmed_data.u)))
 
+    if "throttle_ctrl" in trimmed_data:
+        print("throttle_ctrl trim (%):", np.mean(trimmed_data.throttle_ctrl))
+
     if not args.plot:
         exit(0)
 

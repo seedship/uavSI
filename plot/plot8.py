@@ -146,6 +146,9 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     if 'power' in data:
         ax[(3, 0)].scatter(data.timestamp, data.power, alpha=ALPHA, s=SVAL)
         legend_keys.append('Power (W)')
+    if 'throttle_ctrl' in data:
+        ax[(3, 0)].scatter(data.timestamp, 100 * data.throttle_ctrl, alpha=ALPHA, s=SVAL)
+        legend_keys.append('$\delta_t$ (cmd)')
     ax[(3, 0)].legend(legend_keys).set_draggable(True)
     for seqNo in demarkation:
         ax[(3, 0)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
