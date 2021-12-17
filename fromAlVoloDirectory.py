@@ -13,6 +13,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_to_singlet_doublet_aileron', help='If maneuver is aileron singlet/doublet, skip to beginning of singlet/doublet', action='store_true', default=False)
     parser.add_argument('--skip_to_singlet_doublet_elevator', help='If maneuver is elevator singlet/doublet, skip to beginning of singlet/doublet', action='store_true', default=False)
     parser.add_argument('--skip_to_singlet_doublet_rudder', help='If maneuver is rudder singlet/doublet, skip to beginning of singlet/doublet', action='store_true', default=False)
+    parser.add_argument('--useExisting', help='Use existing u, v, w, alpha, beta', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -26,7 +27,7 @@ if __name__ == '__main__':
             print("Converting:", path)
             data = pd.read_csv(path, header=0)
             data.columns = header
-            data = dp.fromAlvolo2019(data, discard_bad=args.check)
+            data = dp.fromAlvolo2019(data, discard_bad=args.check, useExisting=args.useExisting)
             if args.skip_to_singlet_doublet_aileron:
                 prev = len(data)
                 data = data[dp.calculateSingletDoubletStart(data.roll_ctrl):]

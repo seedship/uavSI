@@ -10,7 +10,7 @@ import re
 DEMARCATE_ALPHA = 0.3
 DEMARCATE_COLOR = 'red'
 
-ALPHA = 0.5
+ALPHA = 0.2
 SVAL = 4
 
 
@@ -50,7 +50,7 @@ def parseDemarcation(path):
     return demarcation
 
 
-def plot8(data: pd.DataFrame, demarkation=[]):
+def scatter8(data: pd.DataFrame, demarkation=[]):
     # if args.drop_start:
     #     data = data[int(args.drop_start):]
     # if args.drop_end:
@@ -72,10 +72,11 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(0, 0)].set_xlabel('Time (s)')
     ax[(0, 0)].set_ylabel('Position (m)')
     ax[(0, 0)].grid()
-    ax[(0, 0)].scatter(data.timestamp, data.N, alpha=ALPHA, s=SVAL)
-    ax[(0, 0)].scatter(data.timestamp, data.E / 10, alpha=ALPHA, s=SVAL)
-    ax[(0, 0)].scatter(data.timestamp, data.U, alpha=ALPHA, s=SVAL)
-    ax[(0, 0)].legend(['Northing', 'Easting (1/10)', 'Altitude']).set_draggable(True)
+    ax[(0, 0)].scatter(data.timestamp, data.N - data.N[0], alpha=ALPHA, s=SVAL)
+    ax[(0, 0)].scatter(data.timestamp, data.E - data.E[0], alpha=ALPHA, s=SVAL)
+    ax[(0, 0)].scatter(data.timestamp, data.U - 168, alpha=ALPHA, s=SVAL)
+    leg = ax[(0, 0)].legend(['Northing', 'Easting', 'Altitude']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(0, 0)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -86,7 +87,8 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(0, 1)].scatter(data.timestamp, data.phi, alpha=ALPHA, s=SVAL)
     ax[(0, 1)].scatter(data.timestamp, data.theta, alpha=ALPHA, s=SVAL)
     ax[(0, 1)].scatter(data.timestamp, data.psi, alpha=ALPHA, s=SVAL)
-    ax[(0, 1)].legend(['$\phi$ (Roll)', '$\\theta$ (Pitch)', '$\psi$ (Heading)']).set_draggable(True)
+    leg = ax[(0, 1)].legend(['$\phi$ (Roll)', '$\\theta$ (Pitch)', '$\psi$ (Heading)']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(0, 1)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -99,7 +101,8 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(1, 0)].scatter(data.timestamp, data.w_dot, alpha=ALPHA, s=SVAL)
     ax[(1, 0)].scatter(data.timestamp, np.linalg.norm((data.u_dot, data.v_dot, data.w_dot), axis=0), alpha=ALPHA,
                        s=SVAL)
-    ax[(1, 0)].legend(['$\dot u$', '$\dot v$', '$\dot w$', 'total']).set_draggable(True)
+    leg = ax[(1, 0)].legend(['$\dot u$', '$\dot v$', '$\dot w$', 'total']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(1, 0)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -110,7 +113,8 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(1, 1)].scatter(data.timestamp, np.rad2deg(data.p), alpha=ALPHA, s=SVAL)
     ax[(1, 1)].scatter(data.timestamp, np.rad2deg(data.q), alpha=ALPHA, s=SVAL)
     ax[(1, 1)].scatter(data.timestamp, np.rad2deg(data.r), alpha=ALPHA, s=SVAL)
-    ax[(1, 1)].legend(['$p$', '$q$', '$r$']).set_draggable(True)
+    leg = ax[(1, 1)].legend(['$p$', '$q$', '$r$']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(1, 1)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -123,7 +127,8 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(2, 0)].scatter(data.timestamp, data.w, alpha=ALPHA, s=SVAL)
     ax[(2, 0)].scatter(data.timestamp, data.Vg, alpha=ALPHA, s=SVAL)
     ax[(2, 0)].scatter(data.timestamp, data.Va, alpha=ALPHA, s=SVAL)
-    ax[(2, 0)].legend(['$u$', '$v$', '$w$', '$V_g$', '$V_a$']).set_draggable(True)
+    leg = ax[(2, 0)].legend(['$u$', '$v$', '$w$', '$V_g$', '$V_a$']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(2, 0)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -133,30 +138,42 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     ax[(2, 1)].grid()
     ax[(2, 1)].scatter(data.timestamp, np.rad2deg(data.alpha), alpha=ALPHA, s=SVAL)
     ax[(2, 1)].scatter(data.timestamp, np.rad2deg(data.beta), alpha=ALPHA, s=SVAL)
-    ax[(2, 1)].legend(['$\\alpha$', '$\\beta$']).set_draggable(True)
+    leg = ax[(2, 1)].legend(['$\\alpha$', '$\\beta$']).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(2, 1)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
 
     ax[(3, 0)].set_xlabel('Time (s)')
-    ax[(3, 0)].set_ylabel('Motor Parameters')
+    # ax[(3, 0)].set_ylabel('Motor Parameters')
+    ax[(3, 0)].set_ylabel('Throttle Setting (% Maximum)')
     ax[(3, 0)].grid()
-    legend_keys = ['Engine RPM (1/10)']
-    ax[(3, 0)].scatter(data.timestamp, data.rpm / 10, alpha=ALPHA, s=SVAL)
-    if 'power' in data:
-        ax[(3, 0)].scatter(data.timestamp, data.power, alpha=ALPHA, s=SVAL)
-        legend_keys.append('Power (W)')
+    ax[(3, 0)].ticklabel_format(useOffset=False)
+    # legend_keys = ['rpm']
+    legend_keys = []
+    # ax[(3, 0)].scatter(data.timestamp, data.rpm / 10, alpha=ALPHA, s=SVAL)
+    # if 'power' in data:
+    #     ax[(3, 0)].scatter(data.timestamp, data.power, alpha=ALPHA, s=SVAL)
+    #     legend_keys.append('Power (W)')
     if 'throttle_ctrl' in data:
-        ax[(3, 0)].scatter(data.timestamp, 100 * data.throttle_ctrl, alpha=ALPHA, s=SVAL)
-        legend_keys.append('$\delta_t$ (cmd)')
-    ax[(3, 0)].legend(legend_keys).set_draggable(True)
+        ax[(3, 0)].scatter(data.timestamp, 100 * (1 + data.throttle_ctrl) / 2, alpha=ALPHA, s=SVAL)
+        legend_keys.append('$\delta_T$')
+    leg = ax[(3, 0)].legend(legend_keys).set_draggable(True)
+    set_legend(leg)
     for seqNo in demarkation:
         ax[(3, 0)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
 
     ax[(3, 1)].set_xlabel('Time (s)')
-    ax[(3, 1)].set_ylabel('Control Deflection (deg)')
+    # ax[(3, 1)].set_ylabel('Control Deflection (deg)')
+    ax[(3, 1)].set_ylabel('Control Deflection (% Maximum)')
     ax[(3, 1)].grid()
+    # ax[(3, 1)].scatter(data.timestamp, data.roll_ctrl, alpha=ALPHA, s=SVAL)
+    # ax[(3, 1)].scatter(data.timestamp, data.pitch_ctrl, alpha=ALPHA, s=SVAL)
+    # ax[(3, 1)].scatter(data.timestamp, data.yaw_ctrl, alpha=ALPHA, s=SVAL)
+    # ax[(3, 1)].legend(['$\delta_a$', '$\delta_e$', '$\delta_r$']).set_draggable(True)
+
+
     ax[(3, 1)].scatter(data.timestamp, data.delta_a, alpha=ALPHA, s=SVAL)
     ax[(3, 1)].scatter(data.timestamp, data.delta_e, alpha=ALPHA, s=SVAL)
     ax[(3, 1)].scatter(data.timestamp, data.delta_r, alpha=ALPHA, s=SVAL)
@@ -169,6 +186,25 @@ def plot8(data: pd.DataFrame, demarkation=[]):
             ncol=2).set_draggable(True)
     else:
         ax[(3, 1)].legend(['$\delta_a$', '$\delta_e$', '$\delta_r$']).set_draggable(True)
+
+
+    # # ax[(3, 1)].scatter(data.timestamp, 100 * data.delta_a / -17, alpha=ALPHA, s=SVAL)
+    # # ax[(3, 1)].scatter(data.timestamp, 100 * data.delta_e / -16, alpha=ALPHA, s=SVAL)
+    # # ax[(3, 1)].scatter(data.timestamp, 100 * data.delta_r / 22, alpha=ALPHA, s=SVAL)
+    # if 'roll_ctrl' in data and 'pitch_ctrl' in data and 'yaw_ctrl' in data:
+    #     ax[(3, 1)].scatter(data.timestamp, 100 * data.roll_ctrl, alpha=ALPHA, s=SVAL)
+    #     ax[(3, 1)].scatter(data.timestamp, 100 * data.pitch_ctrl, alpha=ALPHA, s=SVAL)
+    #     ax[(3, 1)].scatter(data.timestamp, 100 * data.yaw_ctrl, alpha=ALPHA, s=SVAL) # X-Plane convention
+    #     # ax[(3, 1)].legend(
+    #     #     ['$\delta_a$', '$\delta_e$', '$\delta_r$', '$\delta_a$ (cmd)', '$\delta_e$ (cmd)', '$\delta_r$ (cmd)'],
+    #     #     ncol=1).set_draggable(True)
+    #     leg = ax[(3, 1)].legend(
+    #         ['$\delta_a$', '$\delta_e$', '$\delta_r$'],
+    #         ncol=1).set_draggable(True)
+    # else:
+    #     leg = ax[(3, 1)].legend(['$\delta_a$', '$\delta_e$', '$\delta_r$']).set_draggable(True)
+    set_legend(leg)
+
     for seqNo in demarkation:
         ax[(3, 1)].axvline(data.timestamp[np.argmax(data.sequenceNo == seqNo)], alpha=DEMARCATE_ALPHA,
                            color=DEMARCATE_COLOR)
@@ -202,6 +238,13 @@ def plot8(data: pd.DataFrame, demarkation=[]):
     plt.tight_layout()
     plt.show()
 
+def set_legend(leg):
+    for lh in leg.legend.legendHandles:
+        # https://stackoverflow.com/questions/12848808/set-legend-symbol-opacity-with-matplotlib
+        lh.set_alpha(1)
+        # https://stackoverflow.com/questions/24706125/setting-a-fixed-size-for-points-in-legend
+        lh._sizes = [30]
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -234,4 +277,4 @@ if __name__ == '__main__':
             data = demarcate(data, demarcations_, start=int(args.demarcate_start), end=int(args.demarcate_end))
         if args.demarcate and args.trim_to_markers:
             demarcations = demarcations_[int(args.demarcate_start):int(args.demarcate_end)]
-    plot8(data, demarcations)
+    scatter8(data, demarcations)

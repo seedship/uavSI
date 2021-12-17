@@ -105,31 +105,29 @@ if __name__ == '__main__':
             # Fill in the blanks based off stepwise regression
             coefficients = np.array([
                 #    Xu,     Xw,     Xq,       -g*cos(theta),     Xv,     Xp,     Xr, 0, control, X0
-                [     0,      0,      0, -g * np.cos(theta1),      0,      0,      0, 0,       0, np.nan],
+                [np.nan, np.nan, np.nan, -g * np.cos(theta1),      0,      0,      0, 0,       0, np.nan],
                 #    Zu,     Zw,     Zq,           -g*sin(theta) * cos(phi),     Zv,     Zp,     Zr,           -g*cos(theta) * sin(phi), control, Z0
-                [     0,      0,      0, -g * np.sin(theta1) * np.cos(phi1),      0,      0,      0, -g * np.cos(theta1) * np.sin(phi1),       0, np.nan],
+                [np.nan, np.nan, np.nan, -g * np.sin(theta1) * np.cos(phi1),      0,      0,      0, -g * np.cos(theta1) * np.sin(phi1),  np.nan, np.nan],
                 #    Mu,     Mw,     Mq, 0,     Mv,     Mp,     Mr, 0, control, M0
-                [     0,      0,      0, 0,      0,      0,      0, 0,       0, np.nan],
+                [np.nan, np.nan, np.nan, 0,      0,      0,      0, 0,  np.nan, np.nan],
                 #    Yu,     Yw,     Yq,             -g*sin(phi)*sin(theta),     Yv,     Yp,     Yr,         g * cos(phi) * cos(theta), control, Y0
-                [     0,      0,      0, -g * np.sin(phi1) * np.sin(theta1),      0,      0,      0, g * np.cos(phi1) * np.cos(theta1),       0, np.nan],
+                [     0,      0,      0, -g * np.sin(phi1) * np.sin(theta1),      0,      0, np.nan, g * np.cos(phi1) * np.cos(theta1),       0, np.nan],
                 #    Lu,     Lw,     Lq, 0,     Lv,     Lp,     Lr, 0, control, L0
                 [     0,      0,      0, 0,      0,      0,      0, 0,       0, np.nan],
                 #    Nu,     Nw,     Nq, 0,     Nv,     Np,     Nr, 0, control, N0
-                [     0,      0,      0, 0,      0,      0,      0, 0,       0, np.nan],
+                [     0,      0, np.nan, 0, np.nan,      0,      0, 0,       0, np.nan],
             ])
 
             if controlType == 0:
-                inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta, trimmed_data.v,
-                                   trimmed_data.p, trimmed_data.r, trimmed_data.phi, trimmed_data.throttle_ctrl, np.ones(len(trimmed_data.u))])
+                ctrl = trimmed_data.throttle_ctrl
             elif controlType == 1:
-                inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta, trimmed_data.v,
-                                   trimmed_data.p, trimmed_data.r, trimmed_data.phi, trimmed_data.pitch_ctrl, np.ones(len(trimmed_data.u))])
+                ctrl = trimmed_data.pitch_ctrl
             elif controlType == 2:
-                inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta, trimmed_data.v,
-                                   trimmed_data.p, trimmed_data.r, trimmed_data.phi, trimmed_data.roll_ctrl, np.ones(len(trimmed_data.u))])
+                ctrl = trimmed_data.roll_ctrl
             else:
-                inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta, trimmed_data.v,
-                                   trimmed_data.p, trimmed_data.r, trimmed_data.phi, trimmed_data.yaw_ctrl, np.ones(len(trimmed_data.u))])
+                ctrl = trimmed_data.yaw_ctrl
+            inputs = np.array([trimmed_data.u, trimmed_data.w, trimmed_data.q, trimmed_data.theta, trimmed_data.v,
+                               trimmed_data.p, trimmed_data.r, trimmed_data.phi, ctrl, np.ones(len(trimmed_data.u))])
             outputs = np.array([trimmed_data.u_dot, trimmed_data.w_dot, trimmed_data.q_dot, trimmed_data.v_dot,
                                 trimmed_data.p_dot, trimmed_data.r_dot])
 

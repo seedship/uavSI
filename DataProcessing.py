@@ -7,6 +7,7 @@ import re
 import constants.avistar as constants
 
 import scipy.signal
+from scipy.spatial.transform import Rotation as R
 
 # from matplotlib import pyplot as plt
 def calculateSingletDoubletStart(data: pd.Series):
@@ -66,6 +67,12 @@ def calculateSingletDoubletStart(data: pd.Series):
 #         if len(uniqueValues) > 3:
 #             return idx + 1
 
+def demarcateNoEnd(data, demarkation, start=0):
+    startIdx = np.argmax(data.sequenceNo == demarkation[start])
+    data = data[startIdx:]
+    data = data.reset_index(drop=True)
+    return data
+
 def demarcate(data, demarkation, start=0, end=-1):
     startIdx = np.argmax(data.sequenceNo == demarkation[start])
     endIdx = np.argmax(data.sequenceNo == demarkation[end] + 1)
@@ -112,63 +119,165 @@ def constrain_data(data: pd.DataFrame, linearization_point: dict, data_constrain
     return data.drop(to_remove)
 
 
-def fromAlvolo2019(data: pd.DataFrame, discard_bad: bool = False) -> pd.DataFrame:
-    if discard_bad:
-        data['delta_a'] = np.zeros(len(data), dtype=np.float64)
-        data['delta_e'] = np.zeros(len(data), dtype=np.float64)
-        data['delta_r'] = np.zeros(len(data), dtype=np.float64)
-        data = discardBadIMU2019(data)
+def fromAlvolo2019(data: pd.DataFrame, discard_bad: bool = False, useExisting = False) -> pd.DataFrame:
+    data = data.drop_duplicates(subset=['Time']).reset_index()
+    data2 = pd.DataFrame()
+    data2['timestamp'] = pd.Series(np.arange(data.Time[0], data.Time[len(data) - 1], 1 / 400))
+    data2['delta_a'] = np.interp(data2.timestamp, data.Time, data.Aileron_defl)
+    data2['delta_e'] = np.interp(data2.timestamp, data.Time, data.Elevator_defl)
+    data2['delta_r'] = np.interp(data2.timestamp, data.Time, data.Rudder_del)
+
+    data2['delta_a'] = -data2['delta_a'] # negative, opposite of X-plane convention
+    data2['delta_e'] = -data2['delta_e'] # negative, opposite of X-plane convention
+    data2['delta_r'] = -data2['delta_r']
+
+    data2['roll_ctrl'] = data2['delta_a'] / -constants.AILERON_LIMIT
+    data2['pitch_ctrl'] = data2['delta_e'] / -constants.ELEVATOR_LIMIT
+    data2['yaw_ctrl'] = data2['delta_r'] / constants.RUDDER_LIMIT
+
+    data2['phi'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.Euler_Angle_Phi))
+    data2['theta'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.Euler_Angle_Theta))
+    toSample = (data.Euler_Angle_Psi + 360) % 360
+    data2['psi'] = np.interp(data2.timestamp, data.Time, toSample)
+    data2['psi'] = (np.deg2rad(-data2.psi + 90) + (2 * np.pi)) % (2 * np.pi)
+
+    data2['Ax'] = np.interp(data2.timestamp, data.Time, data.Accel_x)
+    data2['Ay'] = np.interp(data2.timestamp, data.Time, data.Accel_y)
+    data2['Az'] = np.interp(data2.timestamp, data.Time, data.Accel_z)
+
+    accelCoeffs = scipy.signal.savgol_coeffs(103, 3)
+    data2['Ax'] = scipy.signal.filtfilt(accelCoeffs, 1, data2.Ax, padlen=0)
+    data2['Ay'] = scipy.signal.filtfilt(accelCoeffs, 1, data2.Ay, padlen=0)
+    data2['Az'] = scipy.signal.filtfilt(accelCoeffs, 1, data2.Az, padlen=0)
+
+    data2['Vg'] = np.interp(data2.timestamp, data.Time, data.V_tot_mps)
+    data2['Vz'] = np.interp(data2.timestamp, data.Time, -data.Vel_z)
+    if not useExisting:
+        data2['Vy'] = np.interp(data2.timestamp, data.Time, data.Vel_x)
+        data2['Vx'] = np.interp(data2.timestamp, data.Time, data.Vel_y)
+
+        # vx = data['Vel_x'].to_numpy()
+        # vy = data['Vel_y'].to_numpy()
+        # vz = data['Vel_z'].to_numpy()
+        # v_i = np.array([vx, vy, vz])
+        # rz = R.from_euler('z', data.psi).as_matrix().transpose().reshape(3, -1)
+        # ry = R.from_euler('y', data.theta).as_matrix().transpose().reshape(3, -1)
+        # rx = R.from_euler('x', data.phi).as_matrix().transpose().reshape(3, -1)
+        # v_b = rz @ ry @ rx @ v_i
+        #
+        # data['u'] = v_b[0]
+        # data['v'] = v_b[1]
+        # data['w'] = v_b[2]
+
+        u = np.zeros(len(data2))
+        v = np.zeros(len(data2))
+        w = np.zeros(len(data2))
+        for idx in range(len(data2)):
+            vx = data2.Vx[idx]
+            vy = data2.Vy[idx]
+            vz = data2.Vz[idx]
+            vi = np.array([vx, vy, vz])
+            rz = R.from_euler('z', -data2.psi[idx]).as_matrix()
+            ry = R.from_euler('y', -data2.theta[idx]).as_matrix()
+            rx = R.from_euler('x', -data2.phi[idx]).as_matrix()
+            vb = rx @ ry @ rz @ vi
+            u[idx] = vb[0]
+            v[idx] = vb[1]
+            w[idx] = vb[2]
+
+        data2['u'] = u
+        data2['v'] = v
+        data2['w'] = w
+
+
+        data2['alpha'] = np.arctan(data2.w/data2.u)
+        data2['beta'] = np.arcsin(data2.v / np.sqrt(data2.u ** 2 + data2.v ** 2 + data2.w ** 2))
     else:
-        data['delta_a'] = data['Aileron_defl'] # negative, opposite of X-plane convention
-        data['delta_e'] = data['Elevator_defl'] # negative, opposite of X-plane convention
-        data['delta_r'] = data['Rudder_del'] # positive, follows X-plane convention
+        data2['Vx'] = np.interp(data2.timestamp, data.Time, data.Vel_x)
+        data2['Vy'] = np.interp(data2.timestamp, data.Time, data.Vel_y)
+        data2['u'] = np.interp(data2.timestamp, data.Time, data.u_mps)
+        data2['v'] = np.interp(data2.timestamp, data.Time, data.v_mps)
+        data2['w'] = np.interp(data2.timestamp, data.Time, data.w_mps)
+        data2['alpha'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.alpha_deg))
+        data2['beta'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.beta_deg))
 
-    data['delta_a'] = -data['delta_a'] # negative, opposite of X-plane convention
-    data['delta_e'] = -data['delta_e'] # negative, opposite of X-plane convention
-    data['delta_r'] = -data['delta_r']
+    # data2['u'] = np.interp(data2.timestamp, data.Time, data.u_mps)
+    # data2['v'] = np.interp(data2.timestamp, data.Time, data.v_mps)
+    # data2['w'] = np.interp(data2.timestamp, data.Time, data.w_mps)
 
-    data['roll_ctrl'] = data['delta_a'] / -constants.AILERON_LIMIT
-    data['pitch_ctrl'] = data['delta_e'] / -constants.ELEVATOR_LIMIT
-    data['yaw_ctrl'] = data['delta_r'] / constants.RUDDER_LIMIT
+    data2['u_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, np.gradient(data2.u, data2.timestamp), padlen=0)
+    data2['v_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, np.gradient(data2.v, data2.timestamp), padlen=0)
+    data2['w_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, np.gradient(data2.w, data2.timestamp), padlen=0)
 
-    # seconds to nanoseconds
-    data['timestamp'] = data['Time'] * 1E9
-
-    data['phi'] = np.deg2rad(data['Euler_Angle_Phi'])
-    data['theta'] = np.deg2rad(data['Euler_Angle_Theta'])
-    data['psi'] = np.deg2rad(data['Euler_Angle_Psi'])
 
     # Filtered
-    rotationalFilterCoeffs = scipy.signal.savgol_coeffs(53, 2)
-    data['p'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_x, padlen=0))
-    data['q'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_y, padlen=0))
-    data['r'] = np.deg2rad(scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data.Rot_Rate_z, padlen=0))
+    data2['p'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.Rot_Rate_x))
+    data2['q'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.Rot_Rate_y))
+    data2['r'] = np.interp(data2.timestamp, data.Time, np.deg2rad(data.Rot_Rate_z))
 
-    accelCoeffs = scipy.signal.savgol_coeffs(53, 2)
-    data['u_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, data.Accel_x, padlen=0)
-    data['v_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, data.Accel_y, padlen=0)
-    data['w_dot'] = scipy.signal.filtfilt(accelCoeffs, 1, -data.Accel_z, padlen=0) # Accel z is flipped
+    rotationalFilterCoeffs = scipy.signal.savgol_coeffs(103, 3)
+    data2['p'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data2.p, padlen=0)
+    data2['q'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data2.q, padlen=0)
+    data2['r'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, data2.r, padlen=0)
 
     # data['p_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.p, data.Time), padlen=0)
     # data['q_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.q, data.Time), padlen=0)
     # data['r_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.r, data.Time), padlen=0)
-    data['phi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.phi, data.Time), padlen=0)
-    data['theta_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.theta, data.Time), padlen=0)
-    data['psi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.psi, data.Time), padlen=0)
+    data2['phi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data2.phi, data2.timestamp), padlen=0)
+    data2['theta_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data2.theta, data2.timestamp), padlen=0)
+    data2['psi_dot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data2.psi, data2.timestamp), padlen=0)
     # data['phi_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.phi_dot, data.Time), padlen=0)
     # data['theta_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.theta_dot, data.Time), padlen=0)
     # data['psi_ddot'] = scipy.signal.filtfilt(rotationalFilterCoeffs, 1, np.gradient(data.psi_dot, data.Time), padlen=0)
 
+    # data['u_dot'] = np.cos(data.psi) * np.cos(data.theta) * data.Ax - np.cos(data.theta) * (
+    #     -data.Vel_z) * data.theta_dot - np.sin(data.theta) * data.Az + np.cos(data.theta) * np.sin(
+    #     data.psi) * data.Ay + np.cos(data.psi) * np.cos(data.theta) * data.Vel_y * data.psi_dot - np.cos(
+    #     data.theta) * np.sin(data.psi) * data.Vel_x * data.psi_dot - np.cos(data.psi) * np.sin(
+    #     data.theta) * data.Vel_x * data.theta_dot - np.sin(data.psi) * np.sin(data.theta) * data.Vel_y * data.theta_dot
+    #
+    # data['v_dot'] = data.Vel_x * (np.sin(data.phi) * np.sin(data.psi) * data.phi_dot - np.cos(data.phi) * np.cos(
+    #     data.psi) * data.psi_dot + np.cos(data.phi) * np.cos(data.psi) * np.sin(data.theta) * data.phi_dot + np.cos(
+    #     data.psi) * np.cos(data.theta) * np.sin(data.phi) * data.theta_dot - np.sin(data.phi) * np.sin(
+    #     data.psi) * np.sin(data.theta) * data.psi_dot) + data.Vel_y * (
+    #                             np.cos(data.phi) * np.sin(data.psi) * np.sin(data.theta) * data.phi_dot - np.cos(
+    #                         data.phi) * np.sin(data.psi) * data.psi_dot - np.cos(data.psi) * np.sin(
+    #                         data.phi) * data.phi_dot + np.cos(data.psi) * np.sin(data.phi) * np.sin(
+    #                         data.theta) * data.psi_dot + np.cos(data.theta) * np.sin(data.phi) * np.sin(
+    #                         data.psi) * data.theta_dot) - (
+    #                             np.cos(data.phi) * np.sin(data.psi) - np.cos(data.psi) * np.sin(data.phi) * np.sin(
+    #                         data.theta)) * data.Ax + (
+    #                             np.cos(data.phi) * np.cos(data.psi) + np.sin(data.phi) * np.sin(data.psi) * np.sin(
+    #                         data.theta)) * data.Ay + np.cos(data.theta) * np.sin(data.phi) * data.Az + np.cos(
+    #     data.phi) * np.cos(data.theta) * (-data.Vel_z) * data.phi_dot - np.sin(data.phi) * np.sin(data.theta) * (
+    #                     -data.Vel_z) * data.theta_dot
+    #
+    # data['w_dot'] = data.Vel_x * (np.cos(data.phi) * np.sin(data.psi) * data.phi_dot + np.cos(data.psi) * np.sin(
+    #     data.phi) * data.psi_dot - np.cos(data.psi) * np.sin(data.phi) * np.sin(data.theta) * data.phi_dot - np.cos(
+    #     data.phi) * np.sin(data.psi) * np.sin(data.theta) * data.psi_dot + np.cos(data.phi) * np.cos(data.psi) * np.cos(
+    #     data.theta) * data.theta_dot) + data.Vel_y * (
+    #                             np.sin(data.phi) * np.sin(data.psi) * data.psi_dot - np.cos(data.phi) * np.cos(
+    #                         data.psi) * data.phi_dot + np.cos(data.phi) * np.cos(data.psi) * np.sin(
+    #                         data.theta) * data.psi_dot + np.cos(data.phi) * np.cos(data.theta) * np.sin(
+    #                         data.psi) * data.theta_dot - np.sin(data.phi) * np.sin(data.psi) * np.sin(
+    #                         data.theta) * data.phi_dot) + (
+    #                             np.sin(data.phi) * np.sin(data.psi) + np.cos(data.phi) * np.cos(data.psi) * np.sin(
+    #                         data.theta)) * data.Ax - (
+    #                             np.cos(data.psi) * np.sin(data.phi) - np.cos(data.phi) * np.sin(data.psi) * np.sin(
+    #                         data.theta)) * data.Ay + np.cos(data.phi) * np.cos(data.theta) * data.Az - np.cos(
+    #     data.theta) * np.sin(data.phi) * (-data.Vel_z) * data.phi_dot - np.cos(data.phi) * np.sin(data.theta) * (
+    #                     -data.Vel_z) * data.theta_dot
+
     # Unfiltered
-    data['p_dot'] = np.gradient(data.p, data.Time)
-    data['q_dot'] = np.gradient(data.q, data.Time)
-    data['r_dot'] = np.gradient(data.r, data.Time)
+    data2['p_dot'] = np.gradient(data2.p, data2.timestamp)
+    data2['q_dot'] = np.gradient(data2.q, data2.timestamp)
+    data2['r_dot'] = np.gradient(data2.r, data2.timestamp)
     # data['phi_dot'] = np.gradient(data.phi, data.Time)
     # data['theta_dot'] = np.gradient(data.theta, data.Time)
     # data['psi_dot'] = np.gradient(data.psi, data.Time)
-    data['phi_ddot'] = np.gradient(data.phi_dot, data.Time)
-    data['theta_ddot'] = np.gradient(data.theta_dot, data.Time)
-    data['psi_ddot'] = np.gradient(data.psi_dot, data.Time)
+    data2['phi_ddot'] = np.gradient(data2.phi_dot, data2.timestamp)
+    data2['theta_ddot'] = np.gradient(data2.theta_dot, data2.timestamp)
+    data2['psi_ddot'] = np.gradient(data2.psi_dot, data2.timestamp)
 
     # Or Filtered
     # data['p'] = np.deg2rad(data['Rot_Rate_x_filt'])
@@ -186,21 +295,19 @@ def fromAlvolo2019(data: pd.DataFrame, discard_bad: bool = False) -> pd.DataFram
     # data['theta_dot'] = scipy.signal.savgol_filter(np.gradient(data.theta, data.Time), 45, 3, mode='constant')
     # data['psi_dot'] = scipy.signal.savgol_filter(np.gradient(data.psi, data.Time), 45, 3, mode='constant')
 
-    data['E'] = data.Easting
-    data['N'] = data.Northing
-    data['U'] = data.Alt
+    data2['E'] = np.interp(data2.timestamp, data.Time, data.Easting)
+    data2['N'] = np.interp(data2.timestamp, data.Time, data.Northing)
+    data2['U'] = np.interp(data2.timestamp, data.Time, data.Alt)
 
-    data['u'] = data.u_mps
-    data['v'] = data.v_mps
-    data['w'] = data.w_mps
+    data2['rpm'] = np.interp(data2.timestamp, data.Time, data.Motor_Rotation_Rate)
+    data2['Va'] = np.interp(data2.timestamp, data.Time, data.Airspeed)
 
-    data['rpm'] = data.Motor_Rotation_Rate
-    data['alpha'] = np.deg2rad(data.alpha_deg)
-    data['beta'] = np.deg2rad(data.beta_deg)
-    data['Va'] = data.Airspeed
-    data['Vg'] = data.V_tot_mps
 
-    return data
+
+    # seconds to nanoseconds
+    data2.timestamp = data2.timestamp * 1E9
+
+    return data2
 
 
 '''

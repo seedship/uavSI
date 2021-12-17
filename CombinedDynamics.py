@@ -25,6 +25,10 @@ class CombinedLinearizationPoint(NamedTuple):
     pitch_ctrl: float = 0
     roll_ctrl: float = 0
     yaw_ctrl: float = 0
+    delta_e: float = 0
+    delta_a: float = 0
+    delta_r: float = 0
+    Va: float = 0
 
 
 def LoadLinearization(json_path: str):
@@ -53,10 +57,14 @@ def TrimData(data_path: str, linearization_point: CombinedLinearizationPoint, da
     data['w'] = data.w - linearization_point.w
     data['phi'] = data.phi - linearization_point.phi
     data['theta'] = data.theta - linearization_point.theta
-    data['r'] = data.r - linearization_point.r
+    # data['r'] = data.r - linearization_point.r
     data['pitch_ctrl'] = data.pitch_ctrl - linearization_point.pitch_ctrl
     data['roll_ctrl'] = data.roll_ctrl - linearization_point.roll_ctrl
     data['yaw_ctrl'] = data.yaw_ctrl - linearization_point.yaw_ctrl
+    data['delta_e'] = data.delta_e - linearization_point.delta_e
+    data['delta_a'] = data.delta_a - linearization_point.delta_a
+    data['delta_r'] = data.delta_r - linearization_point.delta_r
+    data['Va'] = data.Va - linearization_point.Va
     if 'throttle_ctrl' in data:
         data['throttle_ctrl'] = data.throttle_ctrl - linearization_point.throttle_ctrl
     else:
